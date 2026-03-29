@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at top, #0f172a, #020617);
+      color: #e2e8f0;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      background: rgba(255,255,255,0.05);
+      padding: 18px;
+      border-radius: 18px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 0 40px rgba(0,255,255,0.1);
+
+      width: 100%;
+      max-width: 420px;
+      height: 90vh; /* 🔥 MAIN FIX */
+
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between; /* 🔥 smart fill */
+    }
+
+    .top-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ai-title {
+      text-align: center;
+      font-weight: bold;
+      font-size: 22px;
+      color: #38bdf8;
+      text-shadow:
+        0 0 8px rgba(56,189,248,0.9),
+        0 0 18px rgba(147,51,234,0.5);
+    }
+
+    label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(2,6,23,0.85);
+      color: #e2e8f0;
+      font-size: 13px;
+    }
+
+    input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 6px rgba(56,189,248,0.7);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .bottom-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+
+      background: linear-gradient(270deg, #06b6d4, #3b82f6, #9333ea);
+      background-size: 400% 400%;
+      animation: gradientMove 6s ease infinite;
+    }
+
+    .btn:hover {
+      box-shadow: 0 0 15px #38bdf8, 0 0 30px #9333ea;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    .loader {
+      display: none;
+      text-align: center;
+      font-size: 13px;
+      color: #38bdf8;
+    }
+
+    .progress {
+      width: 100%;
+      height: 5px;
+      background: #1e293b;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #06b6d4, #9333ea);
+      transition: width 0.4s ease;
+    }
+
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- 🔝 TOP -->
+  <div class="top-section">
+
+    <h2 class="ai-title">🤖 AI Settings Panel</h2>
+
+    <div>
+      <label>Kualitee Email</label>
+      <input type="text" id="EMAIL">
+    </div>
+
+    <div>
+      <label>Password</label>
+      <input type="password" id="PASSWORD">
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Cycle ID</label>
+        <input type="text" id="CYCLE_ID">
+      </div>
+      <div>
+        <label>Build ID</label>
+        <input type="text" id="build_id">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>TC Name Col Index</label>
+        <input type="number" id="TC_NAME_COLUMN_INDEX">
+      </div>
+      <div>
+        <label>Drive Link Col Index</label>
+        <input type="number" id="DRIVE_LINK_COLUMN_INDEX">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 🔽 BOTTOM -->
+  <div class="bottom-section">
+
+    <button class="btn" onclick="initAI()">🧠 Activate AI System</button>
+
+    <div class="loader" id="loader">
+      <div id="aiText">Initializing AI Engine</div>
+      <div class="progress">
+        <div class="progress-bar" id="bar"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Secure AI System • Powered by Sagar 🚀
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  window.onload = function() {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        if (data) {
+          EMAIL.value = data.EMAIL;
+          PASSWORD.value = data.PASSWORD;
+          CYCLE_ID.value = data.CYCLE_ID;
+          build_id.value = data.build_id;
+          TC_NAME_COLUMN_INDEX.value = data.TC_NAME_COLUMN_INDEX;
+          DRIVE_LINK_COLUMN_INDEX.value = data.DRIVE_LINK_COLUMN_INDEX;
+        }
+      })
+      .getSavedUserData();
+  };
+
+  function initAI() {
+    const loader = document.getElementById("loader");
+    const text = document.getElementById("aiText");
+    const bar = document.getElementById("bar");
+
+    loader.style.display = "block";
+
+    const data = {
+      EMAIL: EMAIL.value,
+      PASSWORD: PASSWORD.value,
+      CYCLE_ID: CYCLE_ID.value,
+      build_id: build_id.value,
+      TC_NAME_COLUMN_INDEX: TC_NAME_COLUMN_INDEX.value,
+      DRIVE_LINK_COLUMN_INDEX: DRIVE_LINK_COLUMN_INDEX.value
+    };
+
+    function updateProgress(value, message) {
+      bar.style.width = value + "%";
+      text.innerText = message;
+    }
+
+    setTimeout(() => updateProgress(30, "🤖 Initializing AI"), 300);
+    setTimeout(() => updateProgress(60, "📡 Connecting to Kualitee Server"), 1200);
+    setTimeout(() => updateProgress(85, "⚙️ Saving"), 2000);
+
+    setTimeout(() => {
+      google.script.run.withSuccessHandler(() => {
+        updateProgress(100, "✅ Done");
+
+        setTimeout(() => {
+          alert("🚀 AI Ready!");
+          google.script.host.close();
+        }, 800);
+
+      }).saveUserData(data);
+    }, 2600);
+  }
+</script>
+
+</body>
+</html>
