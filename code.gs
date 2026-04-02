@@ -14,8 +14,7 @@ var PASSWORD = props.getProperty('PASSWORD');
 var SUBDOMAIN = props.getProperty('SUBDOMAIN') || 'vfqatar-prod';
 
 
-// Sheet ke dynamic column indexes
-// Yeh allow karta hai ki different sheet structures ke saath tool kaam kare
+// Sheet ke dynamic column indexes (0-based: column A = 0)
 var LINK_COL_INDEX = Number(props.getProperty('DRIVE_LINK_COLUMN_INDEX'));
 var TC_NAME_COL_INDEX = Number(props.getProperty('TC_NAME_COLUMN_INDEX'));
 
@@ -31,6 +30,9 @@ function sleep() {
 // ─────────────────────────────────────────
 // SETTINGS PAGE SUPPORT
 // ─────────────────────────────────────────
+// Settings form is filled via HtmlTemplate (server-side) so library users do not need
+// getSavedUserData in the bound script. Saving still requires saveUserData() there;
+// see BOUND_SCRIPT_STUBS.txt
 function getSavedUserData() {
   return {
     EMAIL: props.getProperty('EMAIL') || '',
@@ -71,7 +73,15 @@ function onOpen() {
 }
 
 function showSettings() {
-  var html = HtmlService.createHtmlOutputFromFile('SettingsPage')
+  var d = getSavedUserData();
+  var t = HtmlService.createTemplateFromFile('SettingPage');
+  t.email = d.EMAIL;
+  t.password = d.PASSWORD;
+  t.cycleId = d.CYCLE_ID;
+  t.buildId = d.build_id;
+  t.tcNameCol = d.TC_NAME_COLUMN_INDEX;
+  t.driveLinkCol = d.DRIVE_LINK_COLUMN_INDEX;
+  var html = t.evaluate()
     .setWidth(450)
     .setHeight(500);
   SpreadsheetApp.getUi().showModalDialog(html, "Sagar's Tool Configuration");
@@ -362,8 +372,15 @@ function uploadEvidence_(tcId, executionId, driveLink, statusCell) {
 
 function Run_AI_KualiteeAutomation() {
 
-  if (!LINK_COL_INDEX || !TC_NAME_COL_INDEX) {
+  var rawLinkCol = props.getProperty('DRIVE_LINK_COLUMN_INDEX');
+  var rawTcCol = props.getProperty('TC_NAME_COLUMN_INDEX');
+  if (rawLinkCol == null || String(rawLinkCol).trim() === '' ||
+      rawTcCol == null || String(rawTcCol).trim() === '') {
     throw new Error("Column index not set");
+  }
+  if (isNaN(LINK_COL_INDEX) || isNaN(TC_NAME_COL_INDEX) ||
+      LINK_COL_INDEX < 0 || TC_NAME_COL_INDEX < 0) {
+    throw new Error("Column index invalid");
   }
 
   var sheet = SpreadsheetApp.getActiveSheet();

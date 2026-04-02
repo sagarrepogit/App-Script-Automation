@@ -1,0 +1,18 @@
+Paste into the Google Sheet–bound Apps Script project (the script attached to the spreadsheet — NOT into the library project).
+
+Replace YOUR_LIB with the library identifier from Editor → Libraries (e.g. KualiteeAI).
+
+Why: Google only allows google.script.run from the dialog to call functions that exist in THIS bound project. The settings form is pre-filled by the library on the server, but Save still calls saveUserData() here, which must forward to the library.
+
+function onOpen() {
+  YOUR_LIB.onOpen();
+}
+function showSettings() {
+  YOUR_LIB.showSettings();
+}
+function saveUserData(data) {
+  return YOUR_LIB.saveUserData(data);
+}
+function Run_AI_KualiteeAutomation() {
+  YOUR_LIB.Run_AI_KualiteeAutomation();
+}

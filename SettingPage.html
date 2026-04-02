@@ -151,33 +151,33 @@
 
     <div>
       <label>Kualitee Email</label>
-      <input type="text" id="EMAIL">
+      <input type="text" id="EMAIL" value="<?= email ?>">
     </div>
 
     <div>
       <label>Password</label>
-      <input type="password" id="PASSWORD">
+      <input type="password" id="PASSWORD" value="<?= password ?>">
     </div>
 
     <div class="row">
       <div>
         <label>Cycle ID</label>
-        <input type="text" id="CYCLE_ID">
+        <input type="text" id="CYCLE_ID" value="<?= cycleId ?>">
       </div>
       <div>
         <label>Build ID</label>
-        <input type="text" id="build_id">
+        <input type="text" id="build_id" value="<?= buildId ?>">
       </div>
     </div>
 
     <div class="row">
       <div>
         <label>TC Name Col Index</label>
-        <input type="number" id="TC_NAME_COLUMN_INDEX">
+        <input type="number" id="TC_NAME_COLUMN_INDEX" value="<?= tcNameCol ?>">
       </div>
       <div>
         <label>Drive Link Col Index</label>
-        <input type="number" id="DRIVE_LINK_COLUMN_INDEX">
+        <input type="number" id="DRIVE_LINK_COLUMN_INDEX" value="<?= driveLinkCol ?>">
       </div>
     </div>
 
@@ -204,20 +204,13 @@
 </div>
 
 <script>
-  window.onload = function() {
-    google.script.run
-      .withSuccessHandler(function(data) {
-        if (data) {
-          EMAIL.value = data.EMAIL;
-          PASSWORD.value = data.PASSWORD;
-          CYCLE_ID.value = data.CYCLE_ID;
-          build_id.value = data.build_id;
-          TC_NAME_COLUMN_INDEX.value = data.TC_NAME_COLUMN_INDEX;
-          DRIVE_LINK_COLUMN_INDEX.value = data.DRIVE_LINK_COLUMN_INDEX;
-        }
-      })
-      .getSavedUserData();
-  };
+  function kualiteeSaveFailed_(err) {
+    var msg = err && err.message ? err.message : String(err);
+    alert(
+      'Could not save settings. If this project uses the tool as a library, add a saveUserData() function in your Sheet script that forwards to the library (see BOUND_SCRIPT_STUBS.txt in the repo).\n\nDetails: ' +
+        msg
+    );
+  }
 
   function initAI() {
     const loader = document.getElementById("loader");
@@ -245,15 +238,20 @@
     setTimeout(() => updateProgress(85, "⚙️ Saving"), 2000);
 
     setTimeout(() => {
-      google.script.run.withSuccessHandler(() => {
-        updateProgress(100, "✅ Done");
+      google.script.run
+        .withFailureHandler(function(err) {
+          loader.style.display = "none";
+          kualiteeSaveFailed_(err);
+        })
+        .withSuccessHandler(function() {
+          updateProgress(100, "✅ Done");
 
-        setTimeout(() => {
-          alert("🚀 AI Ready!");
-          google.script.host.close();
-        }, 800);
-
-      }).saveUserData(data);
+          setTimeout(() => {
+            alert("🚀 AI Ready!");
+            google.script.host.close();
+          }, 800);
+        })
+        .saveUserData(data);
     }, 2600);
   }
 </script>
