@@ -172,12 +172,12 @@
 
     <div class="row">
       <div>
-        <label>TC Name Col Index</label>
-        <input type="number" id="TC_NAME_COLUMN_INDEX" value="<?= tcNameCol ?>">
+        <label>Test case name — column number (A=1, B=2, …)</label>
+        <input type="number" id="TC_NAME_COLUMN_NUMBER" name="TC_NAME_COLUMN_NUMBER" min="1" step="1" value="<?= tcNameCol ?>">
       </div>
       <div>
-        <label>Drive Link Col Index</label>
-        <input type="number" id="DRIVE_LINK_COLUMN_INDEX" value="<?= driveLinkCol ?>">
+        <label>Drive link — column number (A=1, B=2, …)</label>
+        <input type="number" id="DRIVE_LINK_COLUMN_NUMBER" name="DRIVE_LINK_COLUMN_NUMBER" min="1" step="1" value="<?= driveLinkCol ?>">
       </div>
     </div>
 
@@ -218,14 +218,16 @@
     const bar = document.getElementById("bar");
 
     loader.style.display = "block";
+    bar.style.width = "40%";
+    text.innerText = "Saving settings…";
 
     const data = {
       EMAIL: EMAIL.value,
       PASSWORD: PASSWORD.value,
       CYCLE_ID: CYCLE_ID.value,
       build_id: build_id.value,
-      TC_NAME_COLUMN_INDEX: TC_NAME_COLUMN_INDEX.value,
-      DRIVE_LINK_COLUMN_INDEX: DRIVE_LINK_COLUMN_INDEX.value
+      TC_NAME_COLUMN_NUMBER: document.getElementById("TC_NAME_COLUMN_NUMBER").value,
+      DRIVE_LINK_COLUMN_NUMBER: document.getElementById("DRIVE_LINK_COLUMN_NUMBER").value
     };
 
     function updateProgress(value, message) {
@@ -233,26 +235,18 @@
       text.innerText = message;
     }
 
-    setTimeout(() => updateProgress(30, "🤖 Initializing AI"), 300);
-    setTimeout(() => updateProgress(60, "📡 Connecting to Kualitee Server"), 1200);
-    setTimeout(() => updateProgress(85, "⚙️ Saving"), 2000);
-
-    setTimeout(() => {
-      google.script.run
-        .withFailureHandler(function(err) {
-          loader.style.display = "none";
-          kualiteeSaveFailed_(err);
-        })
-        .withSuccessHandler(function() {
-          updateProgress(100, "✅ Done");
-
-          setTimeout(() => {
-            alert("🚀 AI Ready!");
-            google.script.host.close();
-          }, 800);
-        })
-        .saveUserData(data);
-    }, 2600);
+    google.script.run
+      .withFailureHandler(function(err) {
+        loader.style.display = "none";
+        kualiteeSaveFailed_(err);
+      })
+      .withSuccessHandler(function() {
+        updateProgress(100, "✅ Saved");
+        setTimeout(function() {
+          google.script.host.close();
+        }, 250);
+      })
+      .saveUserData(data);
   }
 </script>
 

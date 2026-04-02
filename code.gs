@@ -14,19 +14,22 @@ var PASSWORD = props.getProperty('PASSWORD');
 var SUBDOMAIN = props.getProperty('SUBDOMAIN') || 'vfqatar-prod';
 
 
-// Sheet ke dynamic column indexes (0-based: column A = 0)
-var LINK_COL_INDEX = Number(props.getProperty('DRIVE_LINK_COLUMN_INDEX'));
-var TC_NAME_COL_INDEX = Number(props.getProperty('TC_NAME_COLUMN_INDEX'));
+// 1-based column numbers (A=1). Stored as *_COLUMN_NUMBER; *_COLUMN_INDEX keys still read for older saves.
+function getSavedTcColumnNumber_() {
+  return props.getProperty('TC_NAME_COLUMN_NUMBER') || props.getProperty('TC_NAME_COLUMN_INDEX');
+}
+function getSavedDriveLinkColumnNumber_() {
+  return props.getProperty('DRIVE_LINK_COLUMN_NUMBER') || props.getProperty('DRIVE_LINK_COLUMN_INDEX');
+}
+var LINK_COL_NUMBER = Number(getSavedDriveLinkColumnNumber_());
+var TC_NAME_COL_NUMBER = Number(getSavedTcColumnNumber_());
 
 var KUALITEE_BASE_URL = 'https://apiss3.kualitee.com/api/v2';
 
+// After each row that calls Kualitee + Drive; use 0 to disable. Raise (e.g. 100–150) if you hit rate limits.
+var KUALITEE_ROW_THROTTLE_MS = 75;
 
-// ─────────────────────────────────────────
-// HELPER: Sleep / Delay
-// ─────────────────────────────────────────
-function sleep() {
-  Utilities.sleep(200); // 🔥 fixed delay
-}
+
 // ─────────────────────────────────────────
 // SETTINGS PAGE SUPPORT
 // ─────────────────────────────────────────
@@ -39,14 +42,22 @@ function getSavedUserData() {
     PASSWORD: props.getProperty('PASSWORD') || '',
     CYCLE_ID: props.getProperty('CYCLE_ID') || '',
     build_id: props.getProperty('build_id') || '',
-    TC_NAME_COLUMN_INDEX: props.getProperty('TC_NAME_COLUMN_INDEX') || '',
-    DRIVE_LINK_COLUMN_INDEX: props.getProperty('DRIVE_LINK_COLUMN_INDEX') || '',
+    TC_NAME_COLUMN_NUMBER: getSavedTcColumnNumber_() || '',
+    DRIVE_LINK_COLUMN_NUMBER: getSavedDriveLinkColumnNumber_() || '',
     project_id: props.getProperty('project_id') || '27433',
     SUBDOMAIN: props.getProperty('SUBDOMAIN') || 'vfqatar-prod'
   };
 }
 
 function saveUserData(data) {
+  var tcNum = data.TC_NAME_COLUMN_NUMBER;
+  var linkNum = data.DRIVE_LINK_COLUMN_NUMBER;
+  if (tcNum === undefined || tcNum === null || String(tcNum).trim() === '') {
+    tcNum = data.TC_NAME_COLUMN_INDEX;
+  }
+  if (linkNum === undefined || linkNum === null || String(linkNum).trim() === '') {
+    linkNum = data.DRIVE_LINK_COLUMN_INDEX;
+  }
   props.setProperties({
     'EMAIL': data.EMAIL,
     'PASSWORD': data.PASSWORD,
@@ -54,8 +65,8 @@ function saveUserData(data) {
     'build_id': data.build_id,
     'project_id': data.project_id || '27433',
     'SUBDOMAIN': data.SUBDOMAIN || 'vfqatar-prod',
-    'TC_NAME_COLUMN_INDEX': data.TC_NAME_COLUMN_INDEX,
-    'DRIVE_LINK_COLUMN_INDEX': data.DRIVE_LINK_COLUMN_INDEX
+    'TC_NAME_COLUMN_NUMBER': String(tcNum),
+    'DRIVE_LINK_COLUMN_NUMBER': String(linkNum)
   });
   return true;
 }
@@ -65,7 +76,7 @@ function saveUserData(data) {
 // MENU + UI
 // ─────────────────────────────────────────
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("🚀 Sagar's AI Tool")
+  SpreadsheetApp.getUi().createMenu("🚀 Kualitee AI Tool")
     .addItem('⚙️ Open Settings', 'showSettings')
     .addSeparator()
     .addItem('🤖 Run AI Automation', 'Run_AI_KualiteeAutomation')
@@ -79,8 +90,8 @@ function showSettings() {
   t.password = d.PASSWORD;
   t.cycleId = d.CYCLE_ID;
   t.buildId = d.build_id;
-  t.tcNameCol = d.TC_NAME_COLUMN_INDEX;
-  t.driveLinkCol = d.DRIVE_LINK_COLUMN_INDEX;
+  t.tcNameCol = d.TC_NAME_COLUMN_NUMBER;
+  t.driveLinkCol = d.DRIVE_LINK_COLUMN_NUMBER;
   var html = t.evaluate()
     .setWidth(450)
     .setHeight(500);
@@ -275,11 +286,6 @@ function getAllTestCasesMap_() {
 // Test case ko "Passed" ya desired status mein mark karta hai
 
 function executeTestCase_(tc) {
-
-  // Delay before execute test case (rate limit safe)
-    sleep(); // 200ms wait
-
-
   var payload = {
     project_id: String(projectId),
     cycle_id: String(cycleId),
@@ -309,17 +315,15 @@ function executeTestCase_(tc) {
 // ─────────────────────────────────────────
 // Google Drive link se file fetch karke Kualitee par upload karta hai
 
-function uploadEvidence_(tcId, executionId, driveLink, statusCell) {
+/** Returns status display for batch write (no direct sheet I/O). */
+function uploadEvidence_(tcId, executionId, driveLink) {
   try {
-    // 1️⃣ File ID extract
     var fileIdMatch = String(driveLink).match(/[-\w]{25,}/);
     if (!fileIdMatch) throw new Error("Invalid Drive link");
     var fileId = fileIdMatch[0];
 
-    // 2️⃣ File object
     var file = DriveApp.getFileById(fileId);
 
-    // 3️⃣ Allowed file types
     var allowedTypes = ['gif','jpg','png','jpeg','pdf','docx','csv','xls','ppt','mp4','webm','msg','eml','zip','xml','pcap'];
     var fileName = file.getName();
     var ext = fileName.split('.').pop().toLowerCase();
@@ -328,15 +332,12 @@ function uploadEvidence_(tcId, executionId, driveLink, statusCell) {
       throw new Error("File type not allowed: " + ext);
     }
 
-    // 4️⃣ File size check: 50MB
     if (file.getSize() > 50 * 1024 * 1024) {
       throw new Error("File exceeds 50MB limit");
     }
 
-    // 5️⃣ Prepare blob
     var blob = file.getBlob();
 
-    // 6️⃣ Upload to Kualitee
     var formData = {
       project_id: String(projectId),
       cycle_id: String(cycleId),
@@ -348,13 +349,42 @@ function uploadEvidence_(tcId, executionId, driveLink, statusCell) {
 
     callKualiteeAPI('/test_case_execution/execution_attachments', formData, true);
 
-    // ✅ Success status
-    statusCell.setValue("Uploaded ✅") // sirf capital letters
-      .setBackground("#b6d7a8")
-      .setFontWeight("bold");
-
+    return { message: "Uploaded ✅", background: "#b6d7a8", bold: true };
   } catch (e) {
-    statusCell.setValue(e.message).setBackground("#ea9999");
+    return { message: e.message, background: "#ea9999", bold: false };
+  }
+}
+
+// Write only status cells that were updated; merge contiguous rows into one range each.
+function applyStatusPatches_(sheet, statusCol1Based, patches) {
+  if (!patches.length) {
+    return;
+  }
+  patches.sort(function(a, b) {
+    return a.i - b.i;
+  });
+  var segStart = 0;
+  for (var e = 1; e <= patches.length + 1; e++) {
+    var atEnd = e > patches.length;
+    var breakHere = atEnd || patches[e].i !== patches[e - 1].i + 1;
+    if (breakHere) {
+      var slice = patches.slice(segStart, e);
+      var n = slice.length;
+      var r0 = slice[0].i + 2;
+      var vals = [];
+      var bgs = [];
+      var fnts = [];
+      for (var k = 0; k < n; k++) {
+        vals.push([slice[k].message]);
+        bgs.push([slice[k].background]);
+        fnts.push([slice[k].bold ? 'bold' : 'normal']);
+      }
+      sheet.getRange(r0, statusCol1Based, n, 1)
+        .setValues(vals)
+        .setBackgrounds(bgs)
+        .setFontWeights(fnts);
+      segStart = e;
+    }
   }
 }
 
@@ -372,31 +402,44 @@ function uploadEvidence_(tcId, executionId, driveLink, statusCell) {
 
 function Run_AI_KualiteeAutomation() {
 
-  var rawLinkCol = props.getProperty('DRIVE_LINK_COLUMN_INDEX');
-  var rawTcCol = props.getProperty('TC_NAME_COLUMN_INDEX');
+  var rawLinkCol = getSavedDriveLinkColumnNumber_();
+  var rawTcCol = getSavedTcColumnNumber_();
   if (rawLinkCol == null || String(rawLinkCol).trim() === '' ||
       rawTcCol == null || String(rawTcCol).trim() === '') {
-    throw new Error("Column index not set");
+    throw new Error("Column number not set (1 = column A)");
   }
-  if (isNaN(LINK_COL_INDEX) || isNaN(TC_NAME_COL_INDEX) ||
-      LINK_COL_INDEX < 0 || TC_NAME_COL_INDEX < 0) {
-    throw new Error("Column index invalid");
+  if (isNaN(LINK_COL_NUMBER) || isNaN(TC_NAME_COL_NUMBER) ||
+      LINK_COL_NUMBER !== Math.floor(LINK_COL_NUMBER) ||
+      TC_NAME_COL_NUMBER !== Math.floor(TC_NAME_COL_NUMBER) ||
+      LINK_COL_NUMBER < 1 || TC_NAME_COL_NUMBER < 1) {
+    throw new Error("Column number invalid (1 = A, 2 = B, …)");
   }
 
   var sheet = SpreadsheetApp.getActiveSheet();
-  var data = sheet.getDataRange().getValues();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return;
+  }
+
+  // getRange uses 1-based columns; status is the column immediately right of drive link
+  var tcSheetCol = TC_NAME_COL_NUMBER;
+  var linkSheetCol = LINK_COL_NUMBER;
+  var numDataRows = lastRow - 1;
+  var tcValues = sheet.getRange(2, tcSheetCol, numDataRows, 1).getValues();
+  var linkAndStatus = sheet.getRange(2, linkSheetCol, numDataRows, 2).getValues();
+
+  var statusSheetCol = LINK_COL_NUMBER + 1;
+  var statusPatches = [];
 
   var testCaseMap = getAllTestCasesMap_(); // 🔥 only once
 
-  for (var i = 1; i < data.length; i++) {
+  for (var i = 0; i < tcValues.length; i++) {
+    var tcName = tcValues[i][0];
+    var driveLink = linkAndStatus[i][0];
+    var currentStatus = linkAndStatus[i][1];
 
-    var tcName = data[i][TC_NAME_COL_INDEX];
-    var driveLink = data[i][LINK_COL_INDEX];
-    var statusCell = sheet.getRange(i + 1, LINK_COL_INDEX + 2);
-    var currentStatus = data[i][LINK_COL_INDEX + 1];
-
-    if (String(currentStatus).toLowerCase().includes("uploaded")) continue; // skip isme uploaded chahe jaise lika ho fark nahi padta hai emoji ka bhi koi issue nahi hoga
-    if (!tcName || !driveLink) continue; // skip if either is missing;
+    if (String(currentStatus).toLowerCase().includes("uploaded")) continue;
+    if (!tcName || !driveLink) continue;
 
     try {
       var tc = testCaseMap[normalize_(tcName)];
@@ -405,13 +448,25 @@ function Run_AI_KualiteeAutomation() {
 
       var executionId = executeTestCase_(tc);
 
-      // Delay before upload (rate limit safe)
-    sleep(); // 200ms wait
-
-      uploadEvidence_(tc.tcId, executionId, driveLink, statusCell);
-
+      var ev = uploadEvidence_(tc.tcId, executionId, driveLink);
+      statusPatches.push({
+        i: i,
+        message: ev.message,
+        background: ev.background,
+        bold: !!ev.bold
+      });
+      if (KUALITEE_ROW_THROTTLE_MS > 0) {
+        Utilities.sleep(KUALITEE_ROW_THROTTLE_MS);
+      }
     } catch (err) {
-      statusCell.setValue(err.message).setBackground("#ea9999");
+      statusPatches.push({
+        i: i,
+        message: err.message,
+        background: '#ea9999',
+        bold: false
+      });
     }
   }
+
+  applyStatusPatches_(sheet, statusSheetCol, statusPatches);
 }
